@@ -1,0 +1,147 @@
+name: >-
+  web-app-staging_env_a92a2752-3829-4799-9ca4-a355bc0ebd11_app_3a01617d-0c16-4791-a1cc-d52506362908
+  Pipeline (Skyu Generated)
+'on':
+  push:
+    branches:
+      - staging
+      - release/*
+  workflow_dispatch: {}
+  repository_dispatch:
+    types: fb7b82df-560e-44f3-9f8d-40d75429d89e
+env:
+  ENCODED_PIPELINE_SECRET: >-
+    ${{secrets.VITEREACTTEST_ENV_A92A2752382947999CA4A355BC0EBD11_APP_3A01617D0C164791A1CCD52506362908_WEBAPPSTAGING_ENV_A92A2752382947999CA4A355BC0EBD11_APP_3A01617D0C164791A1CCD52506362908_YAML}}
+  BUILD_ENVIRONEMENT_VERSION: latest
+  APP_BUILD_FOLDER: build
+  S3_SYNC_URL: s3://skyu-project-c2009e31-4fec-4ced-baa0-55f20833eaf2-webapps/staging/w
+  APP_INSTALL_DEPS_COMMAND: npm i
+  APP_BUILD_COMMAND: npm run build
+  IMAGE_TAG: ${{github.event.client_payload.commitId || github.sha}}
+  DEPLOY_STEP_SHOULD_DEPLOY: 'false'
+jobs:
+  code-scan:
+    name: Code Scan
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Run :: Decoding Secrets 3363b8e0-93e5-4f56-8250-d4d9840ca322'
+        run: |2-
+
+                  if [ ! -x "$(command -v jq)" ]; then
+                    echo "jq not found, installing..."
+                    sudo apt-get update
+                    sudo apt-get install -y jq
+                  fi
+                  echo "${{ env.ENCODED_PIPELINE_SECRET }}" | base64 --decode | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while read line; do echo "$line" >> $GITHUB_ENV; echo "::add-mask::${line#*=}"; done
+                
+      - name: 'Run :: Checkout repository for CodeQL'
+        uses: actions/checkout@v4
+      - name: 'Run :: Decoding Secrets a2d7919b-4cfd-414c-8bea-568ddcd5fb04'
+        run: |2-
+
+                  if [ ! -x "$(command -v jq)" ]; then
+                    echo "jq not found, installing..."
+                    sudo apt-get update
+                    sudo apt-get install -y jq
+                  fi
+                  echo "${{ env.ENCODED_PIPELINE_SECRET }}" | base64 --decode | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while read line; do echo "$line" >> $GITHUB_ENV; echo "::add-mask::${line#*=}"; done
+                
+      - name: 'Run :: Initialize CodeQL'
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - name: 'Run :: Autobuild for CodeQL'
+        uses: github/codeql-action/autobuild@v3
+      - name: 'Run :: Perform CodeQL Analysis'
+        id: codeql-analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{matrix.language}}
+      - name: 'Run :: Print & Upload CodeQL Report'
+        run: |2-
+
+                  SARIF_FILE=$(find "${{ steps.codeql-analysis.outputs.sarif-output }}" -name '*.sarif' -type f)
+                  if [ -n "$SARIF_FILE" ]; then
+                      echo "CodeQL Results"
+                      cat "$SARIF_FILE" > ${{ env.IMAGE_TAG }}-codeql-result.sarif
+
+                      echo "Uploading CodeQL Results to S3 :: ${{ env.IMAGE_TAG }}-codeql-result.sarif"
+                      # Uploading Minified Trivy Resuls
+                          response=$(curl -X POST ${{ env.S3_UPLOAD_ENDPOINT }} -H "Authorization: ${{ env.SERVICE_ACC_ACCESS_TOKEN }}" -H "x-auth-by: sa" -H "x-organization-id: ${{ env.PIPELINE_ORGANIZATION_ID }}" -H "x-project-id: ${{ env.PIPELINE_PROJECT_ID }}" -H "x-environment-id: ${{ env.PIPELINE_ENVIRONMENT_ID }}" -H "x-trace-id: ${{ env.PIPELINE_TRACE_ID }}" -H "x-resource-id: ${{ env.PIPELINE_APPLICATION_ID }}" -H "Content-Type: multipart/form-data" -F "file=@${{ env.IMAGE_TAG }}-codeql-result.sarif" -F "provider=aws" -F "resourceType=codeql-report" -F "cloudStoragePath=/${{ env.PIPELINE_APPLICATION_ID }}/codeql_results/")
+                          if echo "$response" | grep -q '"success":true'; then
+                            echo "SUCCESS :: $response"
+                          else
+                            echo "FAILED :: $response"
+                          fi
+                  else
+                      echo "SARIF file not found."
+                  fi
+  build-and-sync-web-app:
+    name: Build And Sync Web App
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start
+        run: |2-
+
+              echo " Starting GitHub Action!" && 
+              echo "STEPS_CAN_PROCEED=true" >> $GITHUB_ENV
+              
+      - name: 'Run :: Checkout repository'
+        uses: actions/checkout@v2
+      - name: 'Run :: Checkout Specific Commit'
+        if: ${{ github.event.client_payload.commitId != null }}
+        run: git checkout ${{ github.event.client_payload.commitId }}
+      - name: 'Run :: Decoding Secrets d839ce4d-4aae-4d50-8fa8-43598ebb10d0'
+        run: |2-
+
+                  if [ ! -x "$(command -v jq)" ]; then
+                    echo "jq not found, installing..."
+                    sudo apt-get update
+                    sudo apt-get install -y jq
+                  fi
+                  echo "${{ env.ENCODED_PIPELINE_SECRET }}" | base64 --decode | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while read line; do echo "$line" >> $GITHUB_ENV; echo "::add-mask::${line#*=}"; done
+                
+      - name: 'Run :: Configure AWS credentials 5dcf3c9b-3b90-4576-8553-cd2fbcae65be'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.roleARN }}
+          role-session-name: skyu-pipeline-assume-role-session
+          aws-region: ${{ env.region }}
+      - name: 'Run :: Set up Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.BUILD_ENVIRONEMENT_VERSION }}
+      - name: 'Run :: Install App Dependancies'
+        run: ${{ env.APP_INSTALL_DEPS_COMMAND }}
+      - name: 'Run :: Build App'
+        run: ${{ env.APP_BUILD_COMMAND }} && ls
+      - name: 'Run :: Sync Web App with S3 bucket'
+        run: aws s3 sync ${{ env.APP_BUILD_FOLDER }} ${{ env.S3_SYNC_URL }}
+  deploy-web-app:
+    name: Deploy Web App
+    permissions: write-all
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Run :: Decoding Secrets d1b00d7b-a1ec-49f6-ba8f-87c9395d84d1'
+        run: |2-
+
+                  if [ ! -x "$(command -v jq)" ]; then
+                    echo "jq not found, installing..."
+                    sudo apt-get update
+                    sudo apt-get install -y jq
+                  fi
+                  echo "${{ env.ENCODED_PIPELINE_SECRET }}" | base64 --decode | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while read line; do echo "$line" >> $GITHUB_ENV; echo "::add-mask::${line#*=}"; done
+                
+      - name: 'Run :: Deploy and Notify Resource Service'
+        run: |2-
+
+              response=$(curl -d "appType=WebApp&appVersionId=${{ env.DEPLOYMENT_APP_VERSION_ID }}&tag=${{ env.IMAGE_TAG }}&containerName=${{ env.DEPLOYMENT_CONTAINER_NAME }}&shouldDeploy=${{env.DEPLOY_STEP_SHOULD_DEPLOY}}&pipelineRunId=${{ github.run_id }}&commitDetails[commitHash]=${{ github.sha }}&commitDetails[commitAvatar]=https://github.com/${{ github.event.head_commit.author.name }}.png&commitDetails[commitTime]=${{ github.event.head_commit.timestamp }}&commitDetails[commitMessage]=\"${{ github.event.head_commit.message }}\"&commitDetails[commitUser]=${{ github.event.head_commit.author.name }}" -X PATCH -H 'Authorization: ${{ env.SERVICE_ACC_ACCESS_TOKEN }}' -H 'x-organization-id: ${{ env.PIPELINE_ORGANIZATION_ID }}' -H 'x-project-id: ${{ env.PIPELINE_PROJECT_ID }}' -H 'x-environment-id: ${{ env.PIPELINE_ENVIRONMENT_ID }}' -H 'x-trace-id: ${{ env.PIPELINE_TRACE_ID }}' -H 'x-application-id: ${{ env.PIPELINE_APPLICATION_ID }}' -H 'x-auth-by: sa' -H 'Content-Type: application/x-www-form-urlencoded' '${{ env.DEPLOYMENT_ENDPOINT }}')
+
+              if echo "$response" | grep -q '"success":true'; then
+                echo "SUCCESS :: $response"
+              else
+                echo "FAILED :: $response"
+              fi
+            
